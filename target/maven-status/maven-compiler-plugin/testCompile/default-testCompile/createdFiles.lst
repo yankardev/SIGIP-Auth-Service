@@ -1,0 +1,3 @@
+pe\edu\cibertec\sigip\authservice\repository\UsuarioRepositoryTest.class
+pe\edu\cibertec\sigip\authservice\controller\AuthControllerIntegrationTest.class
+pe\edu\cibertec\sigip\authservice\service\UsuarioServiceTest.class

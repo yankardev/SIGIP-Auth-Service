@@ -1,35 +1,27 @@
-# SIGIP Auth Service
+# auth-service
 
-Servicio de registro e inicio de sesión para SIGIP. Usa Java 25, Spring Boot, Spring Security, BCrypt, Spring Data JPA, MySQL y Eureka.
+Autenticación y usuarios: login REST con usuario en BD, BCrypt y JWT.
 
-## Configuración
-Editar `src/main/resources/application.properties` y configurar `spring.datasource.username` y `spring.datasource.password` según tu MySQL local.
+## Funcionalidad
 
-Requisitos: JDK 25, MySQL y SIGIP Discovery Server activo en el puerto 8761.
+- `POST /api/v1/auth/login` → token JWT (público).
+- `POST /api/v1/auth/registro` → crea un CLIENTE (público).
+- `GET /api/v1/auth/me` → datos del usuario del token.
+- `GET|POST|PUT|DELETE /api/v1/usuarios` → CRUD de usuarios (ADMIN).
+- Al arrancar crea el administrador con `SIGIP_ADMIN_USERNAME` / `SIGIP_ADMIN_PASSWORD`.
 
-Puerto: 8093.
+## Pruebas
 
-## Endpoints
-- `GET /api/auth/health`
-- `POST /api/auth/registro`
-- `POST /api/auth/login`
+- `UsuarioRepositoryTest` (insertar, actualizar, eliminar, listar)
+- `AuthControllerIntegrationTest` (login correcto, clave incorrecta, usuario inactivo, token, roles)
+- `UsuarioServiceTest`
 
-Registro de ejemplo:
-```json
-{
-  "nombres": "Usuario Demo",
-  "correo": "demo@sigip.com",
-  "username": "cliente01",
-  "password": "ClaveSegura123"
-}
+## Ejecución
+
+Puerto `8093`. Base local `sigip_auth` (MySQL); en la nube, esquema propio en PostgreSQL.
+
+Variables: `DB_USER`, `DB_PASSWORD`, `JWT_SECRET` (o `DB_URL` completa).
+
+```bash
+mvn -pl backend/auth-service -am spring-boot:run
 ```
-
-Login de ejemplo:
-```json
-{
-  "username": "cliente01",
-  "password": "ClaveSegura123"
-}
-```
-
-El registro público asigna el rol CLIENTE. La contraseña se almacena con BCrypt, nunca en texto plano.
