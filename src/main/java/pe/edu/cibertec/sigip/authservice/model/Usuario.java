@@ -1,3 +1,4 @@
+
 package pe.edu.cibertec.sigip.authservice.model;
 
 import jakarta.persistence.*;
