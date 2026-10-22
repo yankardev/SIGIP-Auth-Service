@@ -31,8 +31,14 @@ public class DataInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        Rol cliente = crearRolSiNoExiste("CLIENTE");
+        // Roles internos definidos en el informe SIGIP.
         Rol admin = crearRolSiNoExiste("ADMIN");
+        crearRolSiNoExiste("VENTAS");
+        crearRolSiNoExiste("OPERACIONES");
+
+        // Se conserva CLIENTE por compatibilidad con datos históricos mientras se completa
+        // la migración del modelo antiguo al sistema exclusivamente interno.
+        crearRolSiNoExiste("CLIENTE");
 
         if (!adminPassword.isBlank() && !usuarioRepository.existsByNomusuario(adminUsername)) {
             Usuario usuario = Usuario.builder()
