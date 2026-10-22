@@ -12,37 +12,44 @@ import pe.edu.cibertec.sigip.authservice.service.UsuarioService;
 
 import java.util.List;
 
-/** Administración de usuarios (solo ADMIN): GET, POST, PUT y DELETE persistidos en BD. */
+/**
+ * Usuarios de SIGIP.
+ * ADMIN administra cuentas; VENTAS puede consultar clientes para registrar pedidos en mostrador.
+ */
 @RestController
 @RequestMapping("/api/v1/usuarios")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('ADMIN')")
 public class UsuarioController {
 
     private final UsuarioService usuarioService;
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN','VENTAS')")
     public ResponseEntity<List<UsuarioResponse>> listar() {
         return ResponseEntity.ok(usuarioService.listar());
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN','VENTAS')")
     public ResponseEntity<UsuarioResponse> obtener(@PathVariable Integer id) {
         return ResponseEntity.ok(usuarioService.obtener(id));
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<UsuarioResponse> registrar(@Valid @RequestBody UsuarioAdminRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(usuarioService.registrarPorAdmin(request));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<UsuarioResponse> actualizar(@PathVariable Integer id,
                                                       @Valid @RequestBody UsuarioAdminRequest request) {
         return ResponseEntity.ok(usuarioService.actualizar(id, request));
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> eliminar(@PathVariable Integer id) {
         usuarioService.eliminar(id);
         return ResponseEntity.noContent().build();
