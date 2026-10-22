@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import pe.edu.cibertec.sigip.authservice.dto.ClienteRequest;
 import pe.edu.cibertec.sigip.authservice.dto.RegistroUsuarioRequest;
 import pe.edu.cibertec.sigip.authservice.dto.UsuarioAdminRequest;
 import pe.edu.cibertec.sigip.authservice.dto.UsuarioResponse;
@@ -28,11 +29,10 @@ public class UsuarioService {
     private final RolRepository rolRepository;
     private final PasswordEncoder passwordEncoder;
 
-    /** Registro público: siempre crea un CLIENTE, nunca acepta roles enviados por el navegador. */
+    /** Registro público: siempre crea un CLIENTE. */
     @Transactional
     public UsuarioResponse registrarCliente(RegistroUsuarioRequest request) {
         validarUnicidad(request.nomusuario(), request.email(), null);
-
         Usuario usuario = Usuario.builder()
                 .nomusuario(request.nomusuario())
                 .email(request.email())
@@ -42,8 +42,58 @@ public class UsuarioService {
                 .activo(true)
                 .build();
         usuario.getRoles().add(buscarRol("CLIENTE"));
-
         return UsuarioResponse.from(usuarioRepository.save(usuario));
+    }
+
+    /** Alta de cliente desde el área comercial. */
+    @Transactional
+    public UsuarioResponse registrarClienteInterno(ClienteRequest request) {
+        validarUnicidad(request.nomusuario(), request.email(), null);
+        if (request.password() == null || request.password().length() < PASSWORD_MINIMO) {
+            throw new ReglaNegocioException("Asigne una contraseña temporal de al menos " + PASSWORD_MINIMO + " caracteres");
+        }
+        Usuario usuario = Usuario.builder()
+                .nomusuario(request.nomusuario())
+                .email(request.email())
+                .password(passwordEncoder.encode(request.password()))
+                .nombres(request.nombres())
+                .apellidos(request.apellidos())
+                .activo(request.activo() == null || request.activo())
+                .roles(Set.of(buscarRol("CLIENTE")))
+                .build();
+        return UsuarioResponse.from(usuarioRepository.save(usuario));
+    }
+
+    @Transactional(readOnly = true)
+    public List<UsuarioResponse> listarClientes() {
+        return usuarioRepository.findAll().stream()
+                .filter(u -> u.getRoles().stream().anyMatch(r -> "CLIENTE".equals(r.getNomrol())))
+                .map(UsuarioResponse::from)
+                .toList();
+    }
+
+    @Transactional
+    public UsuarioResponse actualizarCliente(Integer id, ClienteRequest request) {
+        Usuario usuario = buscarCliente(id);
+        validarUnicidad(request.nomusuario(), request.email(), usuario);
+        usuario.setNomusuario(request.nomusuario());
+        usuario.setEmail(request.email());
+        usuario.setNombres(request.nombres());
+        usuario.setApellidos(request.apellidos());
+        usuario.setActivo(request.activo() == null || request.activo());
+        usuario.setRoles(Set.of(buscarRol("CLIENTE")));
+        if (request.password() != null && !request.password().isBlank()) {
+            if (request.password().length() < PASSWORD_MINIMO) {
+                throw new ReglaNegocioException("La contraseña debe tener al menos " + PASSWORD_MINIMO + " caracteres");
+            }
+            usuario.setPassword(passwordEncoder.encode(request.password()));
+        }
+        return UsuarioResponse.from(usuarioRepository.save(usuario));
+    }
+
+    @Transactional
+    public void eliminarCliente(Integer id) {
+        usuarioRepository.delete(buscarCliente(id));
     }
 
     @Transactional(readOnly = true)
@@ -52,9 +102,7 @@ public class UsuarioService {
     }
 
     @Transactional(readOnly = true)
-    public UsuarioResponse obtener(Integer id) {
-        return UsuarioResponse.from(buscar(id));
-    }
+    public UsuarioResponse obtener(Integer id) { return UsuarioResponse.from(buscar(id)); }
 
     @Transactional(readOnly = true)
     public UsuarioResponse obtenerPorNombre(String nomusuario) {
@@ -69,17 +117,11 @@ public class UsuarioService {
         if (request.password() == null || request.password().length() < PASSWORD_MINIMO) {
             throw new ReglaNegocioException("La contraseña debe tener al menos " + PASSWORD_MINIMO + " caracteres");
         }
-
         Usuario usuario = Usuario.builder()
-                .nomusuario(request.nomusuario())
-                .email(request.email())
+                .nomusuario(request.nomusuario()).email(request.email())
                 .password(passwordEncoder.encode(request.password()))
-                .nombres(request.nombres())
-                .apellidos(request.apellidos())
-                .activo(request.activo())
-                .roles(resolverRoles(request.roles()))
-                .build();
-
+                .nombres(request.nombres()).apellidos(request.apellidos())
+                .activo(request.activo()).roles(resolverRoles(request.roles())).build();
         return UsuarioResponse.from(usuarioRepository.save(usuario));
     }
 
@@ -87,7 +129,6 @@ public class UsuarioService {
     public UsuarioResponse actualizar(Integer id, UsuarioAdminRequest request) {
         Usuario usuario = buscar(id);
         validarUnicidad(request.nomusuario(), request.email(), usuario);
-
         usuario.setNomusuario(request.nomusuario());
         usuario.setEmail(request.email());
         usuario.setNombres(request.nombres());
@@ -100,18 +141,22 @@ public class UsuarioService {
             }
             usuario.setPassword(passwordEncoder.encode(request.password()));
         }
-
         return UsuarioResponse.from(usuarioRepository.save(usuario));
     }
 
     @Transactional
-    public void eliminar(Integer id) {
-        usuarioRepository.delete(buscar(id));
-    }
+    public void eliminar(Integer id) { usuarioRepository.delete(buscar(id)); }
 
     private Usuario buscar(Integer id) {
         return usuarioRepository.findById(id)
                 .orElseThrow(() -> new RecursoNoEncontradoException("Usuario no encontrado"));
+    }
+
+    private Usuario buscarCliente(Integer id) {
+        Usuario usuario = buscar(id);
+        boolean cliente = usuario.getRoles().stream().anyMatch(r -> "CLIENTE".equals(r.getNomrol()));
+        if (!cliente) throw new RecursoNoEncontradoException("Cliente no encontrado");
+        return usuario;
     }
 
     private void validarUnicidad(String nomusuario, String email, Usuario actual) {
@@ -127,9 +172,7 @@ public class UsuarioService {
 
     private Set<Rol> resolverRoles(Set<String> nombres) {
         Set<Rol> roles = new HashSet<>();
-        for (String nombre : nombres) {
-            roles.add(buscarRol(nombre.toUpperCase()));
-        }
+        for (String nombre : nombres) roles.add(buscarRol(nombre.toUpperCase()));
         return roles;
     }
 
