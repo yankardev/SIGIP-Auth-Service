@@ -23,27 +23,17 @@ import java.util.Set;
 public class UsuarioService {
 
     private static final int PASSWORD_MINIMO = 8;
+    private static final Set<String> ROLES_INTERNOS = Set.of("ADMIN", "VENTAS", "OPERACIONES");
 
     private final UsuarioRepository usuarioRepository;
     private final RolRepository rolRepository;
     private final PasswordEncoder passwordEncoder;
 
-    /** Registro público: siempre crea un CLIENTE, nunca acepta roles enviados por el navegador. */
+    /** Método legado conservado para compatibilidad binaria; el endpoint público ya no está expuesto. */
+    @Deprecated
     @Transactional
     public UsuarioResponse registrarCliente(RegistroUsuarioRequest request) {
-        validarUnicidad(request.nomusuario(), request.email(), null);
-
-        Usuario usuario = Usuario.builder()
-                .nomusuario(request.nomusuario())
-                .email(request.email())
-                .password(passwordEncoder.encode(request.password()))
-                .nombres(request.nombres())
-                .apellidos(request.apellidos())
-                .activo(true)
-                .build();
-        usuario.getRoles().add(buscarRol("CLIENTE"));
-
-        return UsuarioResponse.from(usuarioRepository.save(usuario));
+        throw new ReglaNegocioException("SIGIP es un sistema interno; los usuarios solo pueden ser creados por un administrador");
     }
 
     @Transactional(readOnly = true)
@@ -69,7 +59,6 @@ public class UsuarioService {
         if (request.password() == null || request.password().length() < PASSWORD_MINIMO) {
             throw new ReglaNegocioException("La contraseña debe tener al menos " + PASSWORD_MINIMO + " caracteres");
         }
-
         Usuario usuario = Usuario.builder()
                 .nomusuario(request.nomusuario())
                 .email(request.email())
@@ -79,7 +68,6 @@ public class UsuarioService {
                 .activo(request.activo())
                 .roles(resolverRoles(request.roles()))
                 .build();
-
         return UsuarioResponse.from(usuarioRepository.save(usuario));
     }
 
@@ -87,7 +75,6 @@ public class UsuarioService {
     public UsuarioResponse actualizar(Integer id, UsuarioAdminRequest request) {
         Usuario usuario = buscar(id);
         validarUnicidad(request.nomusuario(), request.email(), usuario);
-
         usuario.setNomusuario(request.nomusuario());
         usuario.setEmail(request.email());
         usuario.setNombres(request.nombres());
@@ -100,7 +87,6 @@ public class UsuarioService {
             }
             usuario.setPassword(passwordEncoder.encode(request.password()));
         }
-
         return UsuarioResponse.from(usuarioRepository.save(usuario));
     }
 
@@ -117,18 +103,20 @@ public class UsuarioService {
     private void validarUnicidad(String nomusuario, String email, Usuario actual) {
         boolean cambiaNombre = actual == null || !actual.getNomusuario().equalsIgnoreCase(nomusuario);
         boolean cambiaEmail = actual == null || !actual.getEmail().equalsIgnoreCase(email);
-        if (cambiaNombre && usuarioRepository.existsByNomusuario(nomusuario)) {
+        if (cambiaNombre && usuarioRepository.existsByNomusuario(nomusuario))
             throw new ReglaNegocioException("El nombre de usuario ya está registrado");
-        }
-        if (cambiaEmail && usuarioRepository.existsByEmail(email)) {
+        if (cambiaEmail && usuarioRepository.existsByEmail(email))
             throw new ReglaNegocioException("El correo ya está registrado");
-        }
     }
 
     private Set<Rol> resolverRoles(Set<String> nombres) {
+        if (nombres == null || nombres.isEmpty()) throw new ReglaNegocioException("Asigne al menos un rol interno");
         Set<Rol> roles = new HashSet<>();
         for (String nombre : nombres) {
-            roles.add(buscarRol(nombre.toUpperCase()));
+            String normalizado = nombre.toUpperCase();
+            if (!ROLES_INTERNOS.contains(normalizado))
+                throw new ReglaNegocioException("Rol no permitido para el sistema interno: " + normalizado);
+            roles.add(buscarRol(normalizado));
         }
         return roles;
     }
