@@ -63,7 +63,7 @@ class UsuarioServiceTest {
 
         assertThat(respuesta.roles()).containsExactly("VENTAS");
         verify(usuarioRepository).save(org.mockito.ArgumentMatchers.argThat(u ->
-                u.getPassword().equals("$2a$hash") && u.isActivo()));
+                u.getPassword().equals("$2a$hash") && Boolean.TRUE.equals(u.getActivo())));
     }
 
     @Test
