@@ -18,8 +18,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Prueba de integración del servicio web REST de login:
- * levanta auth-service completo sobre H2 y valida respuestas exitosas y de error.
+ * Pruebas de integración del servicio de autenticación para el SIGIP interno.
+ * Los clientes son registros comerciales; las cuentas de acceso son únicamente
+ * usuarios internos creados por un ADMIN.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -33,7 +34,7 @@ class AuthControllerIntegrationTest {
     private UsuarioRepository usuarioRepository;
 
     @Test
-    @DisplayName("Login correcto devuelve token JWT y roles")
+    @DisplayName("Login correcto devuelve token JWT y rol ADMIN")
     void loginCorrecto() throws Exception {
         mvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -45,7 +46,7 @@ class AuthControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("La contraseña se almacena cifrada con BCrypt")
+    @DisplayName("La contraseña del administrador se almacena cifrada con BCrypt")
     void passwordCifrada() {
         String hash = usuarioRepository.findByNomusuario("admin").orElseThrow().getPassword();
         assertThat(hash).startsWith("$2").isNotEqualTo("Admin12345");
@@ -81,37 +82,39 @@ class AuthControllerIntegrationTest {
     }
 
     @Test
-    @DisplayName("Registro público crea un CLIENTE y luego puede iniciar sesión")
-    void registroYLogin() throws Exception {
+    @DisplayName("El registro público de usuarios está cerrado")
+    void registroPublicoCerrado() throws Exception {
         mvc.perform(post("/api/v1/auth/registro")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nomusuario":"cliente01","email":"cliente01@sigip.test","password":"Cliente123",
                                  "nombres":"Ana","apellidos":"Pérez"}"""))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.roles[0]").value("CLIENTE"));
+                .andExpect(status().isUnauthorized());
 
-        mvc.perform(post("/api/v1/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"nomusuario\":\"cliente01\",\"password\":\"Cliente123\"}"))
-                .andExpect(status().isOk());
+        assertThat(usuarioRepository.existsByNomusuario("cliente01")).isFalse();
     }
 
     @Test
-    @DisplayName("Rutas protegidas: sin token 401, CLIENTE 403, ADMIN 200")
+    @DisplayName("Rutas administrativas: sin token 401, VENTAS 403, ADMIN 200")
     void controlDeAcceso() throws Exception {
-        mvc.perform(get("/api/v1/usuarios")).andExpect(status().isUnauthorized());
-
-        mvc.perform(post("/api/v1/auth/registro")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("""
-                        {"nomusuario":"cliente02","email":"cliente02@sigip.test","password":"Cliente123",
-                         "nombres":"Luis","apellidos":"Rojas"}"""));
-        String tokenCliente = token("cliente02", "Cliente123");
-        mvc.perform(get("/api/v1/usuarios").header("Authorization", "Bearer " + tokenCliente))
-                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/usuarios"))
+                .andExpect(status().isUnauthorized());
 
         String tokenAdmin = token("admin", "Admin12345");
+
+        mvc.perform(post("/api/v1/usuarios")
+                        .header("Authorization", "Bearer " + tokenAdmin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"nomusuario":"ventas01","email":"ventas01@sigip.test","password":"Ventas123",
+                                 "nombres":"Ana","apellidos":"Ventas","activo":true,"roles":["VENTAS"]}"""))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.roles[0]").value("VENTAS"));
+
+        String tokenVentas = token("ventas01", "Ventas123");
+        mvc.perform(get("/api/v1/usuarios").header("Authorization", "Bearer " + tokenVentas))
+                .andExpect(status().isForbidden());
+
         mvc.perform(get("/api/v1/usuarios").header("Authorization", "Bearer " + tokenAdmin))
                 .andExpect(status().isOk());
     }
