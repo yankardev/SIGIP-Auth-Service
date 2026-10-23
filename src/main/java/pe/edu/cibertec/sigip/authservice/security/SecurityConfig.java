@@ -13,11 +13,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import pe.edu.cibertec.sigip.common.error.RespuestasSeguridad;
 import pe.edu.cibertec.sigip.common.security.FiltroJwtAuth;
 
-/**
- * auth-service es el único servicio que autentica con usuario y contraseña,
- * por eso define su propia cadena de seguridad (las demás usan la de sigip-common).
- * El AuthenticationManager se arma automáticamente con DetalleUsuarioService + BCrypt.
- */
+/** Seguridad del sistema interno SIGIP. Solo el login es público. */
 @Configuration
 public class SecurityConfig {
 
@@ -41,12 +37,11 @@ public class SecurityConfig {
                         .authenticationEntryPoint(RespuestasSeguridad::noAutenticado)
                         .accessDeniedHandler(RespuestasSeguridad::accesoDenegado))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/auth/login", "/api/v1/auth/registro").permitAll()
+                        .requestMatchers("/api/v1/auth/login").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info",
                                 "/actuator/prometheus", "/error").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(filtroJwtAuth, UsernamePasswordAuthenticationFilter.class);
-
         return http.build();
     }
 }
